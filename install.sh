@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Install or update omp-collapsed as an Oh My Pi extension.
-# Run from an authenticated checkout: sh install.sh
+# Run with: bunx github:emmahyde/omp-collapsed
 # Requires native Apple-silicon macOS, Git, Bun, OMP with MLX tiny-model support,
 # and uv (recommended) or Python 3.10–3.13 with venv/pip.
 # Override the destination with OMP_COLLAPSED_DIR or source with OMP_COLLAPSED_REPO.
@@ -43,7 +43,7 @@ else
 	echo "Cloning omp-collapsed into $DEST"
 	mkdir -p "$(dirname "$DEST")"
 	git clone --depth 1 "$REPO" "$DEST" ||
-		fail "cannot clone $REPO; this repository requires access and authenticated Git (for GitHub CLI users: gh auth login && gh auth setup-git)"
+		fail "cannot clone $REPO; check GitHub access and your Git configuration"
 fi
 
 echo "Installing dependencies"

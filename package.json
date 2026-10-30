@@ -4,6 +4,7 @@
   "description": "Compacted tool-result views for Oh My Pi: tool cards, tool rows, and AST outlines.",
   "type": "module",
   "main": "./index.ts",
+  "bin": "./install.sh",
   "scripts": {
     "test": "bun test ./tests",
     "typecheck": "tsc --noEmit"

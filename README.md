@@ -11,14 +11,12 @@ Use `/collapsed` to configure the extension, Ctrl+Shift+T to toggle its cards, a
 
 # Install
 
-You need native Apple-silicon macOS, Git, [GitHub CLI](https://cli.github.com), [Bun](https://bun.sh), OMP with MLX support, and `uv` or Python 3.10–3.13 with venv and pip. You also need access to this repository and Hugging Face.
+You need native Apple-silicon macOS, Git, [Bun](https://bun.sh), OMP with MLX support, and `uv` or Python 3.10–3.13 with venv and pip. You also need access to GitHub and Hugging Face.
 
-1. Authenticate GitHub CLI, then run the installer:
+1. Run the installer:
 
    ```sh
-   gh auth login
-   gh auth setup-git
-   gh api repos/emmahyde/omp-collapsed/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
+   bunx github:emmahyde/omp-collapsed
    ```
 
 2. Restart OMP, or run `/reload-plugins`.
