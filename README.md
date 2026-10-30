@@ -50,25 +50,16 @@ flowchart TD
 
 `hydemods.toolRows` (in `/settings`, Tools) picks how tool calls draw. Ctrl+N cycles `cards → ast → lines → group` and flashes the mode that is on. Ctrl+O shows the full cards in any mode.
 
-## cards (standard)
+## cards
 
-OMP's tool cards with the tweaks below applied.
+Standard OMP cards, 
 
-- **Integrated tool cards.** Results draw inside the tool card of OMP. The tool name is green on success and red on error.
-  - Prose reads, bash output, and Python output collapse to a preview. Ctrl+O shows all.
-  - A collapsed preview keeps its row budget for content. Sequential lines show from the top, and an inline `[...]` at the end of the last line marks truncation; it never takes a separate row.
-  - Read, write, edit, grep, eval, bash, wait, task, and archive results each have their own card. Background shell commands collapse to one line.
-  - `wait` collapses to one status line with job counts and names (for example `✓ Wait · 1 completed GatePoll`). Failures lead and turn red.
-  - Shell `grep -rn` and `rg -n` rows drop the repeated `path:line:` prefix and group matches under one filename header.
-  - File excerpts hide snapshot hashes, numbered gutters and comments.
-- **Collapse earlier tool calls.** Every card in an unbroken run of tool calls folds to its header row, and the newest stays full. Failed and running cards stay full.
-- **Plain code blocks.** Fenced blocks with no language tag get a tint and a green bar on their left.
-- **Clickable paths.** Every existing file path in the transcript becomes a terminal link. A `:line` or `#L12` suffix opens at that line. Links follow `tui.hyperlinks`.
-- **TOON for the model.** The model gets JSON tool results as TOON. You still see the JSON tree in cards. Errors are never converted.
-
-## ast (AST outputs)
+## AST
 
 Cards with source shown as declarations instead of raw text.
+
+<img width="1000" alt="Screenshot 2026-10-30 at 12 42 57" src="https://github.com/user-attachments/assets/b842e796-a122-4a8d-93a5-d1958dcebe1f" />
+
 
 - **Reads and writes** show the declaration outline. Writes add LSP diagnostics. A module or namespace that only wraps one class folds into its row (`class Shop::Billing::Invoice < Base`), so the class's methods show.
 - **Edits** show the declarations they touched. Ctrl+O shows the changed lines.
@@ -82,10 +73,7 @@ Cards with source shown as declarations instead of raw text.
 
 One row per call, on adjacent rows with no gap, in three aligned columns: the tool, a status line, and the file in the path colour.
 
-```text
-• Read  Reading the invoice totals  invoice.rb:40-80
-• Git   Checking recent commits
-```
+<img width="1000" alt="Screenshot 2026-10-30 at 12 43 07" src="https://github.com/user-attachments/assets/e13b2963-07bb-4e04-827a-44870c0e9b6b" />
 
 - Each tool has its own label colour from the theme. A bash row shows the program its command runs, past any leading `cd dir &&`.
 - The status line is the intent (`i`) the agent wrote for the call, exactly as written. A call without one gets a line from a local model, in the agent's voice and never naming the tool. Until it lands, the row shows the call's main argument in dim italics.
@@ -94,12 +82,11 @@ One row per call, on adjacent rows with no gap, in three aligned columns: the to
 - Eval rows show the first file the code names in the file column.
 - Giles tool calls get readable labels (for example `GILES:WK:CHK`); this extension only labels them.
 
-## group (default)
+## group
 
 While the agent works, a burst lists its calls one per row, as in `lines`. When the agent replies, or you send a message, the calls give way to a status row and one bullet per distinct tool, in the order the tools were first used: the tool, what the agent used it for, and what came of it.
 
-<img width="1000" alt="Screenshot 2026-10-30 at 12 41 25" src="https://github.com/user-attachments/assets/4365a49e-aad8-47c9-b502-139780894bcc" />
-
+<img width="1000" alt="Screenshot 2026-10-30 at 12 42 26" src="https://github.com/user-attachments/assets/3298b974-5a1b-4a1e-a667-6b2686b11a29" />
 
 - A long bullet wraps under its own text. In `group` mode the Task subagent footer stays under the Task bullet.
 - A local model writes the bullets from the steps as they stand when the burst ends, with the most weight on edits, failed steps, and the last steps. Until they land, or if the model is down, each bullet is the line of the tool's last call.
