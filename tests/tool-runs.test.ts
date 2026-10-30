@@ -22,9 +22,9 @@ class FakeCard implements RunCard {
 	}
 }
 
-const setup = () => {
+const setup = (enabled = () => true) => {
 	class Card extends FakeCard {}
-	const runs = installToolRuns(Card.prototype, { headRow: rows => rows[0] ?? "", requestRender: () => {} });
+	const runs = installToolRuns(Card.prototype, { enabled, headRow: rows => rows[0] ?? "", requestRender: () => {} });
 	runs.setActive(true);
 	return { Card, runs };
 };
@@ -40,6 +40,22 @@ describe("tool runs", () => {
 		b.render();
 		expect(a.render()).toEqual(["head"]);
 		expect(b.render()).toEqual(["head", "body"]);
+	});
+
+	test("switching to native cards restores full cards and finalization", () => {
+		let enabled = true;
+		const { Card } = setup(() => enabled);
+		const [a, b] = [new Card(), new Card()];
+		a.render();
+		finish(a);
+		b.render();
+		expect(a.render()).toEqual(["head"]);
+		expect(a.isTranscriptBlockFinalized()).toBe(false);
+		enabled = false;
+		expect(a.render()).toEqual(["head", "body"]);
+		expect(a.isTranscriptBlockFinalized()).toBe(true);
+		enabled = true;
+		expect(a.render()).toEqual(["head"]);
 	});
 
 	test("failed and expanded cards stay full", () => {

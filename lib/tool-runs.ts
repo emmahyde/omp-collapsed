@@ -31,9 +31,10 @@ interface Run {
 }
 
 const VERSION_STRIDE = 1_000_000;
-const INSTALLED = Symbol.for("hydemods.toolRuns.installed");
+const INSTALLED = Symbol.for("collapsed.toolRuns.installed");
 
 export interface ToolRunOptions {
+	enabled(): boolean;
 	/** First row of the card, shortened to width. */
 	headRow(rows: readonly string[], width: number): string;
 	/** Asks the host to redraw after a run closes. */
@@ -68,7 +69,7 @@ export function installToolRuns(proto: RunCard, options: ToolRunOptions): ToolRu
 	const join = (card: RunCard): CardState | undefined => {
 		const known = states.get(card);
 		if (known) return known;
-		if (!active) return undefined;
+		if (!active || !options.enabled()) return undefined;
 		if (!current?.open) current = { cards: [], open: true };
 		const state: CardState = { run: current, expanded: false, failed: false, flips: 0, collapsed: false };
 		current.cards.push(card);
@@ -77,7 +78,7 @@ export function installToolRuns(proto: RunCard, options: ToolRunOptions): ToolRu
 	};
 
 	const isCollapsed = (card: RunCard, state: CardState): boolean => {
-		if (state.expanded || state.failed) return false;
+		if (!options.enabled() || state.expanded || state.failed) return false;
 		const { cards } = state.run;
 		if (cards[cards.length - 1] === card) return false;
 		// A card still running keeps its full view.
@@ -108,7 +109,7 @@ export function installToolRuns(proto: RunCard, options: ToolRunOptions): ToolRu
 	};
 	proto.isTranscriptBlockFinalized = function(this: RunCard) {
 		const state = states.get(this);
-		if (state?.run.open) return false;
+		if (options.enabled() && state?.run.open) return false;
 		return originals.finalized.call(this);
 	};
 	proto.getTranscriptBlockVersion = function(this: RunCard) {

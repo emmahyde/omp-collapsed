@@ -47,7 +47,7 @@ import { createPathResolver } from "./path-links";
  * so the rows written to scrollback are the finished ones.
  *
  * Everything is patched per instance when a block joins a transcript, delegating to whatever the
- * prototype holds at call time, so other hydemods wrappers on the same prototypes keep working.
+ * prototype holds at call time, so other collapsed wrappers on the same prototypes keep working.
  */
 
 type ResultLike = { content?: unknown; details?: unknown; isError?: boolean; toolName?: string };
@@ -173,9 +173,9 @@ function subjectSource(call: CallState): string | undefined {
 const CodeToken = /[A-Za-z_$][\w$]*(?:(?:\.|#|::)[A-Za-z_$][\w$]*)+|\b[a-z_$][\w$]*[A-Z][\w$]*|\b[A-Za-z$]\w*_\w+|\b\w+(?:\(\)|[!?](?=\s|$))/g;
 /** A plan is recomputed at most this often while nothing it reads has changed. */
 const PlanTtlMs = 40;
-const STATE = Symbol.for("hydemods.toolRows.state");
-const OVERRIDDEN = Symbol.for("hydemods.toolRows.overridden");
-const INSTALLED = Symbol.for("hydemods.toolRows.installed");
+const STATE = Symbol.for("collapsed.toolRows.state");
+const OVERRIDDEN = Symbol.for("collapsed.toolRows.overridden");
+const INSTALLED = Symbol.for("collapsed.toolRows.installed");
 
 type Holder = { [INSTALLED]?: () => void };
 type Adopted = { [STATE]?: BlockState;[OVERRIDDEN]?: string[] };
@@ -332,7 +332,7 @@ export class ToolRows {
 						? "harness"
 						: undefined;
 		if (!kind) return;
-		// Blocks already on screen when hydemods (re)loads may be in scrollback; never pull them into a run.
+		// Blocks already on screen when collapsed (re)loads may be in scrollback; never pull them into a run.
 		const state: BlockState = { kind, call: emptyCall(), committed: existing && kind !== "assistant", visible: true, epoch: this.epoch };
 		(component as Adopted)[STATE] = state;
 		if (kind === "tool") this.overrideTool(component, state);

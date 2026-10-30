@@ -43,7 +43,7 @@ test("YAML is re-encoded only as a real mapping or sequence", () => {
 	expect(parseYamlDocument("Error: something went wrong.")).toBeUndefined();
 	expect(parseYamlDocument("Error: foo")).toBeUndefined();
 	expect(parseYamlDocument("- first thing.\n- second thing.")).toBeUndefined();
-	expect(parseYamlDocument("name: hydemods\nversion: 1.0.0")).toEqual({ name: "hydemods", version: "1.0.0" });
+	expect(parseYamlDocument("name: omp-collapsed\nversion: 1.0.0")).toEqual({ name: "omp-collapsed", version: "1.0.0" });
 });
 
 test("grep output past the match limit reports what it hid", () => {
@@ -72,7 +72,7 @@ test("collapsed tool previews count what they hide and expansion restores every 
 });
 
 test("the TOON toggle switches JSON output to pretty JSON", () => {
-	const value = { name: "hydemods", nested: { count: 2 } };
+	const value = { name: "omp-collapsed", nested: { count: 2 } };
 	expect(formatJsonOutput(value).format).toBe("toon");
 	const off = formatJsonOutput(value, false);
 	expect(off.format).toBe("json");

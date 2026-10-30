@@ -12,12 +12,16 @@ test('search calls retain their namespace across direct and device forms', () =>
   expect(callLabel('skill_search', { task: 'rendering' })).toBe(skill);
 });
 
-test('a unified Giles device retains the action instead of merging unrelated operations', () => {
-  const feedback = callLabel('write', { path: 'xd://giles', content: '{"action":"feedback_submit","args":{"feedback":"Keep this"}}' });
-  const recall = callLabel('giles', { action: 'recall', args: { query: 'Keep this' } });
+test('Giles group devices retain the action instead of merging unrelated operations', () => {
+  const feedback = callLabel('write', { path: 'xd://giles_feedback', content: '{"action":"submit","args":{"feedback":"Keep this"}}' });
+  const recall = callLabel('giles_wiki', { action: 'recall', args: { query: 'Keep this' } });
   expect(feedback).toBe('GILES:FB');
   expect(recall).toBe('GILES:RECALL');
   expect(feedback).not.toBe(recall);
+  expect(callLabel('giles_wiki', { action: 'status' })).toBe('GILES:STATUS');
+  expect(callLabel('giles_retro', { action: 'status' })).toBe('GILES:RETRO_STATUS');
+  expect(callLabel('read', { path: 'xd://giles_work/finish' })).toBe('GILES:WORK');
+  expect(callLabel('write', { path: 'xd://giles', content: '{"action":"feedback_submit","args":{}}' })).toBe(feedback);
 });
 
 test('direct, device and historical forms of one operation share a canonical label', () => {

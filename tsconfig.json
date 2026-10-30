@@ -9,6 +9,7 @@
     "skipLibCheck": true,
     "allowArbitraryExtensions": true,
     "types": ["bun", "assets"],
+    "typeRoots": ["./node_modules/@types", "./types"],
     "lib": ["esnext", "dom.asynciterable"]
   },
   "include": ["index.ts", "lib/**/*.ts", "tests/**/*.ts"]

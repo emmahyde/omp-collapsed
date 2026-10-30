@@ -4,7 +4,7 @@ import { stripControls } from "./eval-summary";
 /**
  * How tool calls draw in the transcript.
  * - `cards`: OMP's tool cards, untouched.
- * - `ast`: hydemods cards with reads, writes, edits, grep hits and printed source as declaration outlines.
+ * - `ast`: collapsed cards with reads, writes, edits, grep hits and printed source as declaration outlines.
  * - `lines`: one row per call, described by a local model, consecutive rows with no gap.
  * - `group`: one row per burst of calls, summarized by a local model once the burst ends.
  */
@@ -206,13 +206,19 @@ function operationArgs(args: unknown): Record<string, unknown> | undefined {
  } catch { return record; }
 }
 
+function gilesActionLabel(action: string): string {
+ return `GILES:${action === "feedback_submit" ? "FB" : action.toUpperCase()}`;
+}
+
 function deviceLabel(device: string, args: unknown): string {
- if (device === "giles" || device === "librarian") {
-  const action = operationArgs(args)?.action;
-  if (typeof action !== "string" || !/^[a-z][a-z0-9_]*$/i.test(action)) return "GILES";
-  return `GILES:${action === "feedback_submit" ? "FB" : action.toUpperCase()}`;
- }
+ const action = operationArgs(args)?.action;
+ const named = typeof action === "string" && /^[a-z][a-z0-9_]*$/i.test(action) ? action : undefined;
+ if (device === "giles" || device === "librarian") return named ? gilesActionLabel(named) : "GILES";
+ // `giles_<group>` devices retain the full operation, matching older single-device rows.
+ const group = /^giles_([a-z]+)$/.exec(device)?.[1];
+ if (group && named) return gilesActionLabel(group === "wiki" ? named : `${group}_${named}`);
  if (LabelFor[device]) return LabelFor[device]!;
+ if (group) return `GILES:${group.toUpperCase()}`;
  if (device.startsWith("wiki_")) return `GILES:${device.slice(5).toUpperCase()}`;
  if (device.startsWith("mcp__")) {
   const bare = device.slice(5);
@@ -467,7 +473,7 @@ export function cleanLine(text: string, max = MaxLineLength): string | undefined
   .replace(/^(?:read|grep|glob|find|bash|edit|write|search|eval|task|fetch|lsp)\s*[:·]\s*|^read\s+(?=\S+\.\w+:)/i, "")
   // A bare tool noun before a third-person verb ("Glob scans x") is a label; "Grep approval in x" stays an imperative.
   .replace(/^(?:grep|glob|bash|eval|lsp)\s+(?=(?!this\b|is\b|was\b)[a-z]+s\b)/i, "")
-  // Titles name files by bare filename: `hydemods/lib/tool-rows.ts` → `tool-rows.ts`.
+  // Titles name files by bare filename: `project/lib/tool-rows.ts` → `tool-rows.ts`.
   .replace(/(?<![\w:/.~-])(?:[\w.~-]*\/)+([\w-][\w.-]*\.[A-Za-z]\w*)/g, "$1");
  if (line.split(" ").length < 2) return undefined;
  // A method list (`file: a does x; b does y`) keeps whole clauses rather than cutting one mid-word.

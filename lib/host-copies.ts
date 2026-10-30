@@ -117,7 +117,7 @@ export function renderFallbackToolCard(input: FallbackToolRenderInput, uiTheme: 
 }
 
 /**
- * The `task` tool card with hydemods' compact agent rows, or undefined when OMP's own renderer should
+ * The `task` tool card with collapsed's compact agent rows, or undefined when OMP's own renderer should
  * draw it (expanded, review findings, nested trees, no agents yet).
  */
 export function renderTaskToolCard(

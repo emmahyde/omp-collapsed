@@ -2,57 +2,51 @@
 
 <img width="1000" alt="Screenshot 2026-10-30 at 12 39 55" src="https://github.com/user-attachments/assets/4d0cfdfd-d7d0-41b6-88bf-e3fdf90127f1" />
 
-Compacted tool-result views for [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi). It redraws tool calls and their results as short cards, one-line rows, or per-burst summaries, and shows source code as declaration outlines. The model sees the same results as TOON, a compact table form.
+Compacted tool-result views for [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi). It adds compact cards, one-line rows, burst summaries, and source outlines. It can convert JSON results to TOON for the model.
 
-It is the card and row part of [hydemods](https://github.com/emmahyde/hydemods), split into its own extension.
+# What changes
 
-# Replaces hydemods cards and rows
-
-- Run omp-collapsed **instead of** the card and row features of hydemods. Both extensions wrap the same OMP tool renderers, so running both draws every card twice.
-- Setting names stay `hydemods.*`, so a `settings.yaml` that already tunes hydemods keeps working.
-- The panel command is `/collapsed` (hydemods keeps `/hydemods`). The tool-card toggle is Ctrl+Shift+T and the rows cycle is Ctrl+N, as in hydemods.
+Base OMP shows tool calls in tool cards. This extension adds compact cards, declaration outlines, one-line calls, and summaries of tool-call bursts.
+Use `/collapsed` to configure the extension, Ctrl+Shift+T to toggle its cards, and Ctrl+N to cycle its views.
 
 # Install
 
-You need [Bun](https://bun.sh) and git on your PATH.
+You need native Apple-silicon macOS, Git, [GitHub CLI](https://cli.github.com), [Bun](https://bun.sh), OMP with MLX support, and `uv` or Python 3.10–3.13 with venv and pip. You also need access to this repository and Hugging Face.
 
-1. Run the installer:
+1. Authenticate GitHub CLI, then run the installer:
 
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/emmahyde/omp-collapsed/main/install.sh | sh
+   gh auth login
+   gh auth setup-git
+   gh api repos/emmahyde/omp-collapsed/contents/install.sh -H 'Accept: application/vnd.github.raw+json' | sh
    ```
 
 2. Restart OMP, or run `/reload-plugins`.
-3. Open `/collapsed` to see the tweaks. All of them start on.
+3. Open `/collapsed` to configure the extension.
 
-The installer clones into `~/.omp/agent/extensions/omp-collapsed` and runs `bun install`. `OMP_COLLAPSED_DIR` and `OMP_COLLAPSED_REPO` override the destination and the source.
+The installer clones into `~/.omp/agent/extensions/omp-collapsed`, installs the runtime dependencies, and downloads `llama3.2:3b` for MLX. It verifies the model can load before enabling MLX.
+It sets the shared `providers.tinyModelDevice` setting, which also affects OMP's other tiny-model features. Existing caches and unrelated settings are preserved.
+`OMP_COLLAPSED_DIR` and `OMP_COLLAPSED_REPO` override the destination and source. A custom destination must be in OMP's extension discovery paths.
 
 # How it fits together
 
-```mermaid
-flowchart TD
-    OMP[OMP host] -->|tool results| CARDS[Integrated tool cards]
-    OMP -->|context hook| TOON[TOON for the model]
-    CARDS --> AST[AST outlines<br/>code, markdown, source text, read display]
-    CARDS --> EVAL[Eval, bash, wait, task, archive cards]
-    OMP -->|transcript blocks| ROWS{hydemods.toolRows}
-    ROWS -->|cards| CARDS
-    ROWS -->|ast| AST
-    ROWS -->|lines| LINES[One row per call]
-    ROWS -->|group| GROUP[One bullet per tool per burst]
-    LINES --> LOCAL[Local model writes status lines]
-    GROUP --> LOCAL
-    CARDS --> RUNS[Collapse earlier tool calls]
-    OMP -->|assistant and user rows| TEXT[Plain code blocks and path links]
+```text
+OMP tool calls
+  ├─ cards ─ native OMP cards
+  ├─ ast ─── compact cards with source outlines
+  ├─ lines ─ one row per call ── local model
+  └─ group ─ one summary per burst ── local model
+
+OMP model context ── optional TOON conversion
 ```
 
 # Tool rows modes
 
-`hydemods.toolRows` (in `/settings`, Tools) picks how tool calls draw. Ctrl+N cycles `cards → ast → lines → group` and flashes the mode that is on. Ctrl+O shows the full cards in any mode.
+`collapsed.toolRows` (in `/settings`, Tools) picks how tool calls draw. Ctrl+N cycles `cards → ast → lines → group` and flashes the mode that is on. Ctrl+O shows the full cards in any mode.
 
 ## cards
 
-Standard OMP cards, 
+OMP's native tool cards, without compact-card rendering or run folding.
 
 ## AST
 
@@ -76,7 +70,7 @@ One row per call, on adjacent rows with no gap, in three aligned columns: the to
 <img width="1000" alt="Screenshot 2026-10-30 at 12 43 07" src="https://github.com/user-attachments/assets/e13b2963-07bb-4e04-827a-44870c0e9b6b" />
 
 - Each tool has its own label colour from the theme. A bash row shows the program its command runs, past any leading `cd dir &&`.
-- The status line is the intent (`i`) the agent wrote for the call, exactly as written. A call without one gets a line from a local model, in the agent's voice and never naming the tool. Until it lands, the row shows the call's main argument in dim italics.
+- The status line uses the agent's intent (`i`) when OMP's judge accepts it. Otherwise, a local model writes a line. Until it lands, the row shows the call's main argument in dim italics.
 - Read file labels link to the original local path. Cmd+click opens the file. Missing files stay plain text.
 - Task rows read `Task  <what the subagents were sent to do>  <first agent> +N`, with the subagent footer under the row.
 - Eval rows show the first file the code names in the file column.
@@ -93,7 +87,11 @@ While the agent works, a burst lists its calls one per row, as in `lines`. When 
 - A run spans the thinking and harness notices between its calls; they hide inside the run. A reply or a prompt ends it.
 - A run's rows reach scrollback once the run ends and its lines land (at most 4 seconds after).
 - **Wiki badges.** A `◆` before a row's file marks that the knowledge wiki (`~/.llm-wiki`, or `.llm-wiki` in the working folder) has a page whose title, slug or tags name that file's stem or the skill. Stems shorter than 4 letters never match.
-- **Pills.** With `hydemods.toolPills` on, each row's tool label is drawn as a pill: upper case, bold, the tool's colour as the fill, and black or white text by the fill's brightness. Without truecolour, the pill is drawn in reverse video.
+- **Pills.** With `collapsed.toolPills` on, each row's tool label is drawn as a pill: upper case, bold, the tool's colour as the fill, and black or white text by the fill's brightness. Without truecolour, the pill is drawn in reverse video.
+
+# TOON for the model
+
+Eligible structured bash, MCP, and eval outputs are converted in model context in every view. Errors stay unchanged.
 
 # Keys and commands
 
@@ -105,28 +103,30 @@ While the agent works, a burst lists its calls one per row, as in `lines`. When 
 
 # Settings
 
-Settings live in OMP's `settings.yaml` under the `hydemods.` prefix. The panel and `/settings` (Tools) edit them.
+Settings live in OMP's `config.yml` under the `collapsed.` prefix. The panel and `/settings` (Tools) edit them.
 
-- `hydemods.toolRows`: `cards`, `ast`, `lines`, or `group` (default `group`).
-- `hydemods.toolRowsModel`: the local model that writes row lines (`omp tiny-models` lists them; default `llama3.2:3b`). Set `providers.tinyModelDevice` to `mlx` to run it on the Apple GPU. Call arguments never leave the machine.
-- `hydemods.toolPills`: draw row labels as pills (default off).
-- `hydemods.wikiBadges`: the `◆` wiki badge (default on).
-- `hydemods.collapsedLines`: rows in a collapsed card (default 5).
-- `hydemods.integratedToolExpansion`: integrated tool cards.
-- `hydemods.toolResultsToon`: TOON in cards and model context.
-- `hydemods.evalCommandSummaries`: a short intent summary on each Eval card, from the tiny model.
-- `hydemods.astStructuring`: declaration outlines.
-- `hydemods.plainCodeBlocks`: tint untagged fenced blocks.
-- `hydemods.toolRuns`: collapse earlier tool calls.
-- `hydemods.pathLinks`: clickable paths.
+- `collapsed.toolRows`: `cards`, `ast`, `lines`, or `group` (default `group`).
+- `collapsed.toolRowsModel`: the local model that writes row lines (`omp tiny-models` lists them; default `llama3.2:3b`). Set `providers.tinyModelDevice` to `mlx` to run it on the Apple GPU.
+- `collapsed.toolPills`: draw row labels as pills (default off).
+- `collapsed.wikiBadges`: the `◆` wiki badge (default on).
+- `collapsed.collapsedLines`: rows in a collapsed card (default 5).
+- `collapsed.integratedToolExpansion`: integrated tool cards.
+- `collapsed.toolResultsToon`: TOON in compact cards and model context in every view.
+- `collapsed.evalCommandSummaries`: a short intent summary on each Eval card, from the tiny model.
+- `collapsed.astStructuring`: declaration outlines.
+- `collapsed.plainCodeBlocks`: tint untagged fenced blocks.
+- `collapsed.toolRuns`: collapse earlier tool calls.
+- `collapsed.pathLinks`: clickable paths.
+
+OMP's configured judge evaluates call intents. It may send call arguments and output to the judge provider and bill the session; the row model itself is local.
 
 # Development
 
 Bun, no build step. From the repository root:
 
 1. `bun install`
-2. `bun run test` runs the unit tests against the modules of the OMP that `omp` on your `PATH` provides. It skips itself if `omp` is missing.
-3. `bun run typecheck` links the `@oh-my-pi/*` types of that OMP into `node_modules`, then runs `tsc --noEmit`.
+2. `bun run test` runs the unit tests against the pinned OMP development package.
+3. `bun run typecheck` checks the extension and tests.
 4. To test end to end, install the extension (see Install), edit `index.ts`, and run `/reload-plugins`.
 
 Layout:

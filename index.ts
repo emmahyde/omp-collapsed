@@ -27,9 +27,10 @@ import { referenceLocations } from "./lib/reference-output";
 // Keep helper modules below lib/: configured extension roots scan direct .ts files.
 import { isSettingsInitialized, settings as hostSettings } from "@oh-my-pi/pi-coding-agent/config/settings";
 import { cfgReadToolResultPreview } from "@oh-my-pi/pi-coding-agent/tools/settings";
-import { cappedRenderPayload, collapseTextLines, decodeNestedJson, formatJsonOutput, formatFileExcerpt, isFileExcerpt, formatSearchOutput, formatCommandText, formatJsonWithFooter, markdownOutput, parseGrepOutput, parseTabularData, parseYamlDocument, sanitizeTerminalText, separateGeneratedNoticeFooter, stripGeneratedNoticeFooter } from "./lib/tool-output";
+import { cappedRenderPayload, collapseTextLines, decodeNestedJson, formatJsonOutput, formatFileExcerpt, isFileExcerpt, formatSearchOutput, formatCommandText, formatJsonWithFooter, markdownOutput, parseGrepOutput, parseTabularData, parseYamlDocument, sanitizeTerminalText, stripGeneratedNoticeFooter } from "./lib/tool-output";
 import { splitArchiveOutput } from "./lib/archive-output";
 import { decodeEvalOutput } from "./lib/eval-output";
+import { toonForModel } from "./lib/model-context";
 import { EvalSummaryCache } from "./lib/eval-summary";
 import { RunSystemPrompt, setSkillNames, TOOL_ROWS_MODES, type Complete } from "./lib/tool-rows";
 import { ToolRows } from "./lib/tool-rows-host";
@@ -56,7 +57,7 @@ type Tweak = TweakDef & { setting: Setting<boolean> };
 
 /**
  * Each entry owns its label and display copy; its on/off state is a persisted OMP setting,
- * `hydemods.<camelName>` (the names hydemods used, so existing settings carry over).
+ * `collapsed.<camelName>`, independent of other extensions.
  */
 const TWEAK_DEFS: TweakDef[] = [
 	{
@@ -69,7 +70,7 @@ const TWEAK_DEFS: TweakDef[] = [
 		name: "tool-results-toon",
 		title: "TOON tool results",
 		description: "Formats structured tool results as TOON in cards and model context.",
-		render: () => "Unpacks JSON, printed Eval tool envelopes, and MCP JSON blocks. Uniform arrays share one header. Read and grep results retain AST context.",
+		render: () => "Converts eligible JSON, tables, and Eval output in model context in every view. Errors and incomplete results stay unchanged.",
 	},
 	{
 		name: "eval-command-summaries",
@@ -145,7 +146,7 @@ const collapsedLinesSetting = integerSetting(
 const toolRowsSetting = enumSetting(
 	"tool-rows",
 	"Tool rows",
-	"How tool calls draw. cards: tool cards with plain output. ast: tool cards with reads, writes, edits, grep hits and printed source as declaration outlines. lines: one row per call, described by a local model, with no gaps. group: one row per burst of calls, summarized by a local model once the agent replies. Ctrl+O shows the cards.",
+	"How tool calls draw. cards: OMP's native tool cards. ast: tool cards with reads, writes, edits, grep hits and printed source as declaration outlines. lines: one row per call, described by a local model, with no gaps. group: one row per burst of calls, summarized by a local model once the agent replies. Ctrl+O shows the cards.",
 	TOOL_ROWS_MODES,
 	"group",
 );
@@ -160,7 +161,7 @@ const toolRowsModelSetting = stringSetting(
 	"Local model (see `omp tiny-models`) that writes tool row lines. It runs on the Apple GPU when providers.tinyModelDevice is mlx.",
 	"llama3.2:3b",
 	value => {
-		if (!value.trim()) throw new Error("hydemods.toolRowsModel must name a local model");
+		if (!value.trim()) throw new Error("collapsed.toolRowsModel must name a local model");
 	},
 );
 const toolPillsSetting = booleanSetting(
@@ -465,35 +466,6 @@ function toolResultText(content: unknown): string | undefined {
 	return texts.length === 0 ? undefined : texts.join("\n");
 }
 
-// Complete JSON tool output, including `display[N]:`-prefixed eval results, encoded as TOON for
-// the model. Undefined when the text is not one JSON document or when TOON would not be a plain
-// body (command results, artifact previews, excerpts), so those results reach the model verbatim.
-function toonForModel(text: string): string | undefined {
-	const { body, footer } = separateGeneratedNoticeFooter(text);
-	const trimmed = body.trim();
-	let jsonText: string;
-	const displayMatch = /^(?:display\[\d+\]:\s*)?([\[{][\s\S]*)$/.exec(trimmed);
-	if (displayMatch) {
-		jsonText = displayMatch[1];
-	} else {
-		// MCP tools often serialize structuredContent as a markdown fenced ```json block.
-		const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(trimmed);
-		if (fenced && /^[\[{]/.test(fenced[1].trim())) {
-			jsonText = fenced[1].trim();
-		} else {
-			return undefined;
-		}
-	}
-	const decoded = decodeNestedJson(jsonText);
-	if (decoded === null || typeof decoded !== "object") return undefined;
-	try {
-		const output = formatJsonOutput(decoded);
-		if (output.format !== "toon") return undefined;
-		return footer ? `${output.text}\n${footer.trimStart()}` : output.text;
-	} catch {
-		return undefined;
-	}
-}
 
 // True when OMP's own card already draws this result as a JSON tree: the tool (or the xd://
 // device behind a write) has no bespoke renderer and the text is one JSON document.
@@ -612,7 +584,7 @@ function padToolBlockLine(line: string, width: number): string {
 
 type ToolCardDetails = NonNullable<ToolMessage["details"]>;
 
-// Which hydemods layout a result gets. "text" means hydemods has nothing structural to add.
+// Which collapsed layout a result gets. "text" means collapsed has nothing structural to add.
 function structureToolResult(details: ToolCardDetails | undefined): StructuredText {
 	const result = details?.result;
 	const references = referenceLocations(result);
@@ -1015,8 +987,8 @@ type EditOutlineDetails = {
 	oldText?: string;
 	newText?: string;
 	snapshotsPruned?: boolean;
-	/** Outline captured by hydemods when the edit finished, while the disk still matched the diff. */
-	hydemodsOutline?: string;
+	/** Outline captured by collapsed when the edit finished, while the disk still matched the diff. */
+	collapsedOutline?: string;
 	perFileResults?: Array<{ diagnostics?: DiagnosticsLike }>;
 	diagnostics?: DiagnosticsLike;
 };
@@ -1054,7 +1026,7 @@ function editOutlineStructured(result: { content: unknown; details?: unknown }):
 	const details = (result.details ?? undefined) as EditOutlineDetails | undefined;
 	if (!details || typeof details.diff !== "string" || !details.diff.trim() || (details.perFileResults?.length ?? 0) > 1) return undefined;
 	const path = typeof details.path === "string" ? details.path : undefined;
-	if (typeof details.hydemodsOutline === "string") return { text: details.hydemodsOutline, format: "edit-outline", path };
+	if (typeof details.collapsedOutline === "string") return { text: details.collapsedOutline, format: "edit-outline", path };
 	const diagnostics = details.diagnostics ?? details.perFileResults?.[0]?.diagnostics;
 	// Diagnostics can be filled in after the edit settles, so they are part of the memo key.
 	const diagnosticsKey = Bun.hash(JSON.stringify(diagnostics?.messages ?? [])).toString();
@@ -1292,7 +1264,7 @@ type CardTakeover = {
 };
 
 // LSP diagnostics ride along in edit/write details (top level, in `meta`, or per file). The
-// edit outline draws its own; any other hydemods view would drop them, so those results keep
+// edit outline draws its own; any other collapsed view would drop them, so those results keep
 // the native card and its diagnostics tree.
 function carriesDiagnostics(details: unknown): boolean {
 	if (!details || typeof details !== "object") return false;
@@ -1341,8 +1313,8 @@ function bashSourceStructured(args: unknown, text: string, ast: boolean): Struct
 	return { text: compact.split("\n").filter(row => row.trim() !== "").join("\n"), format: "code", lang: ext };
 }
 
-// The hydemods view of one settled result, or undefined when the native renderer should draw it:
-// takeover off, still streaming, plain text hydemods cannot improve, a JSON document OMP already
+// The collapsed view of one settled result, or undefined when the native renderer should draw it:
+// takeover off, still streaming, plain text collapsed cannot improve, a JSON document OMP already
 // shows as a tree, or a payload past the size cap. Failures get the same card in error colour
 // rather than a different one.
 
@@ -1499,7 +1471,7 @@ function evalViewResult(result: EvalViewResult, partial: boolean, theme: Theme, 
 
 type EvalArchiveCell = EvalViewArgs & { output: string; textOutput?: string; hasMarkdown?: boolean; status?: string; exitCode?: number; durationMs?: number; statusEvents?: Array<Record<string, unknown>>; statusEventsElided?: number };
 
-// A settled, successful Eval whose printed output holds archive listings becomes one hydemods card
+// A settled, successful Eval whose printed output holds archive listings becomes one collapsed card
 // (code, archive data, prose, status, foot) in place of the native cell box. Failed, partial or
 // oversized results return undefined and keep the native box, so errors stay as the host draws them.
 function evalArchiveCard(result: EvalViewResult, partial: boolean, expanded: boolean, takeover: CardTakeover): string | undefined {
@@ -1532,7 +1504,7 @@ function evalArchiveCard(result: EvalViewResult, partial: boolean, expanded: boo
 	for (const value of details.jsonOutputs ?? []) rows.push(...formatJsonOutput(value).text.split("\n"));
 	return rows.join("\n");
 }
-function hydemodsResultComponent(toolName: string, result: { content: unknown; details?: unknown; isError?: boolean }, options: { expanded: boolean; isPartial: boolean }, theme: Theme, args: unknown, takeover: CardTakeover) {
+function collapsedResultComponent(toolName: string, result: { content: unknown; details?: unknown; isError?: boolean }, options: { expanded: boolean; isPartial: boolean }, theme: Theme, args: unknown, takeover: CardTakeover) {
 	if (!takeover.active()) return undefined;
 	// Background-job wait: one status line collapsed; the full snapshot stays in the model result and on Ctrl+O.
 	if (toolName === "wait") {
@@ -1576,7 +1548,7 @@ function hydemodsResultComponent(toolName: string, result: { content: unknown; d
 		if (source) return toolMessageRenderer({ customType: "integrated-tool-expansion", content: "", details: { toolName, result: source.text, isError: false, cwd: process.cwd() } }, { expanded: options.expanded }, theme, takeover.display, source);
 	}
 	if (!result.isError && nativeRendersJsonTree(toolName, args, resultText)) return undefined;
-	// Huge results keep the native card: hydemods would re-parse, colour and Markdown-render
+	// Huge results keep the native card: collapsed would re-parse, colour and Markdown-render
 	// the whole payload on every repaint, and the native card already limits what it draws.
 	if (resultText !== undefined && cappedRenderPayload(resultText) === undefined) return undefined;
 	const payload = notebookPayload(toolName, args, result.isError) ?? extractToolPayload({ toolName, result });
@@ -1591,15 +1563,15 @@ function hydemodsResultComponent(toolName: string, result: { content: unknown; d
 	return toolMessageRenderer({ customType: "integrated-tool-expansion", content: "", details }, { expanded: options.expanded }, theme, takeover.display, structured);
 }
 
-// Draw hydemods results inside OMP's own tool card instead of beside it. Every bespoke
-// renderer is wrapped so its result view defers to hydemods when hydemods applies; tools that
+// Draw collapsed results inside OMP's own tool card instead of beside it. Every bespoke
+// renderer is wrapped so its result view defers to collapsed when collapsed applies; tools that
 // fall to OMP's generic card keep it, except the ones listed in EXTRA_CARD_TOOLS. Because the
 // native component owns the card, Ctrl+O expansion and hidden tool output apply unchanged.
 const EXTRA_CARD_TOOLS = ["context_notes", "wait"];
-// Tools whose native card is already the better view; hydemods never replaces these.
+// Tools whose native card is already the better view; collapsed never replaces these.
 const NATIVE_CARD_TOOLS: Record<string, true> = { find: true };
 
-function installNativeCardTakeover(takeover: CardTakeover): void {
+function installNativeCardTakeover(takeover: CardTakeover): () => void {
 	for (const [name, original] of Object.entries(toolRenderers)) {
 		if (NATIVE_CARD_TOOLS[name]) continue;
 		const wrapped: ToolRenderer = {
@@ -1609,6 +1581,7 @@ function installNativeCardTakeover(takeover: CardTakeover): void {
 				return original.renderCall(name === "eval" && takeover.active() ? evalViewArgs(args, takeover, expanded) : args, options, theme);
 			},
 			renderResult(result, options, theme, args) {
+				if (!takeover.active()) return original.renderResult(result, options, theme, args);
 				if (name === "eval") {
 					const archiveExpanded = (options as { renderContext?: { expanded?: boolean } }).renderContext?.expanded ?? options.expanded;
 					const archiveCard = evalArchiveCard(result, options.isPartial, archiveExpanded, takeover);
@@ -1649,7 +1622,7 @@ function installNativeCardTakeover(takeover: CardTakeover): void {
 					const taskCard = renderTaskToolCard(result, options, theme);
 					if (taskCard) return taskCard;
 				}
-				const card = hydemodsResultComponent(name, result, options, theme, args, takeover);
+				const card = collapsedResultComponent(name, result, options, theme, args, takeover);
 				return card ? linkComponentRows(card, pathLinksFor) : original.renderResult(result, options, theme, args);
 			},
 		};
@@ -1659,6 +1632,7 @@ function installNativeCardTakeover(takeover: CardTakeover): void {
 		};
 		if (original.describeResult) {
 			wrapped.describeResult = (result, options, args) => {
+				if (!takeover.active()) return original.describeResult!(result, options, args);
 				if (name === "eval") {
 					const archiveExpanded = (options as { renderContext?: { expanded?: boolean } }).renderContext?.expanded ?? options.expanded;
 					const archiveCard = evalArchiveCard(result, options.isPartial, archiveExpanded, takeover);
@@ -1697,6 +1671,7 @@ function installNativeCardTakeover(takeover: CardTakeover): void {
 		}
 		toolRenderers[name] = wrapped;
 	}
+	const extras = new Map<string, ToolRenderer>();
 	for (const name of EXTRA_CARD_TOOLS) {
 		if (name in toolRenderers) continue;
 		const fallback = (args: unknown, result: { content: unknown; isError?: boolean } | undefined, options: { expanded: boolean; isPartial: boolean }, theme: Theme) =>
@@ -1706,15 +1681,26 @@ function installNativeCardTakeover(takeover: CardTakeover): void {
 				result: result ? { output: toolResultText(result.content) ?? "", isError: result.isError } : undefined,
 				options,
 			}, theme);
-		toolRenderers[name] = {
+		extras.set(name, {
 			mergeCallAndResult: true,
 			renderCall: (args, options, theme) => fallback(args, undefined, options, theme),
 			renderResult: (result, options, theme, args) => {
-				const card = hydemodsResultComponent(name, result, options, theme, args, takeover);
+				const card = collapsedResultComponent(name, result, options, theme, args, takeover);
 				return card ? linkComponentRows(card, pathLinksFor) : fallback(args, result, options, theme);
 			},
-		};
+		});
 	}
+	const syncExtras = () => {
+		for (const [name, renderer] of extras) {
+			if (takeover.active()) {
+				if (!(name in toolRenderers)) toolRenderers[name] = renderer;
+			} else if (toolRenderers[name] === renderer) {
+				delete toolRenderers[name];
+			}
+		}
+	};
+	syncExtras();
+	return syncExtras;
 }
 
 const COLLAPSED_LINE_PRESETS = [1, 3, 4, 5, 10];
@@ -1747,7 +1733,7 @@ function panelComponent(theme: ThemeLike, done: (result: undefined) => void, dis
 	const paint = () => {
 		const lines: string[] = [
 			theme.fg("accent", theme.bold("COLLAPSED")),
-			theme.fg("muted", "Toggles persist globally in settings.yaml, not per session"),
+			theme.fg("muted", "Toggles persist globally in config.yml, not per session"),
 			"",
 		];
 
@@ -1859,7 +1845,7 @@ export default function collapsed(pi: ExtensionAPI): void {
 		// invalidates drawn tool blocks; the interactive host's setToolsExpanded ends in
 		// ui.requestRender(true), so re-setting the current value is the supported way to repaint
 		// them. Needed when a toggle changes which renderer applies: with the takeover off,
-		// hydemodsResultComponent falls back to the host renderer on the next paint.
+		// collapsedResultComponent falls back to the host renderer on the next paint.
 		if (ctx.hasUI) ctx.ui.setToolsExpanded(ctx.ui.getToolsExpanded());
 	};
 	let lastCtx: ExtensionContext | undefined;
@@ -1891,6 +1877,7 @@ export default function collapsed(pi: ExtensionAPI): void {
 		installTranscriptRows(UserMessageComponent.prototype, linkPaths);
 	};
 	const toolRuns = installToolRuns(ToolExecutionComponent.prototype as unknown as RunCard, {
+		enabled: () => readSetting(toolRowsSetting) !== "cards",
 		headRow: (rows, width) => truncateToWidth(rows.find(row => /\S/.test(row.replace(/\x1b\[[0-9;]*m/g, ""))) ?? "", width),
 		requestRender: () => { if (lastCtx) repaintToolCards(lastCtx); },
 	});
@@ -1911,20 +1898,20 @@ export default function collapsed(pi: ExtensionAPI): void {
 	// omp-collapsed or the original renderer fills the result view for the session.
 	const evalSummaries = new EvalSummaryCache();
 	const takeover: CardTakeover = {
-		display, active: () => display.cardsOn && isTweakEnabled("integrated-tool-expansion"),
+		display, active: () => readSetting(toolRowsSetting) !== "cards" && display.cardsOn && isTweakEnabled("integrated-tool-expansion"),
 		summary: (language, code) => {
 			if (!lastCtx || !lastCtx.hasUI || !isTweakEnabled("eval-command-summaries")) return;
 			evalSummaries.request(language, code, lastCtx, () => { if (lastCtx) repaintToolCards(lastCtx); });
 			return evalSummaries.get(language, code);
 		},
 	};
-	installNativeCardTakeover(takeover);
+	const syncNativeCardTools = installNativeCardTakeover(takeover);
 	installReadGroupTakeover(takeover);
 
 	// Tool rows: one line per call, or one per burst, written by a local model.
 	// Shared by every instance in the process: a task subagent records its own calls here,
 	// so the UI session's rows can name them and show their intents when the subagent is focused.
-	const callsKey = Symbol.for("hydemods.toolRows.calls");
+	const callsKey = Symbol.for("collapsed.toolRows.calls");
 	const liveCalls: Map<string, { name: string; args: unknown }> = ((globalThis as Record<symbol, unknown>)[callsKey] ??= new Map()) as Map<string, { name: string; args: unknown }>;
 	let scannedEntries = -1;
 	const lookupCall = (id: string) => {
@@ -1971,7 +1958,6 @@ export default function collapsed(pi: ExtensionAPI): void {
 		},
 	});
 	let uninstallToolRows: (() => void) | undefined;
-	watchSetting(toolRowsSetting, () => toolRows.refresh());
 	watchSetting(toolRowsModelSetting, () => toolRows.reset());
 	watchSetting(toolPillsSetting, () => toolRows.refresh());
 	watchSetting(wikiBadgesSetting, () => toolRows.refresh());
@@ -1984,6 +1970,7 @@ export default function collapsed(pi: ExtensionAPI): void {
 	// When the tool cards are active, OMP's inline read previews are redundant and clash with the
 	// read cards. Override it off while active; clear override when off.
 	const syncReadPreviewMapping = () => {
+		syncNativeCardTools();
 		if (!isSettingsInitialized()) return;
 		if (takeover.active()) {
 			cfgReadToolResultPreview.override(hostSettings, false);
@@ -1992,6 +1979,10 @@ export default function collapsed(pi: ExtensionAPI): void {
 		}
 	};
 	syncReadPreviewMapping();
+	watchSetting(toolRowsSetting, () => {
+		toolRows.refresh();
+		syncReadPreviewMapping();
+	});
 	const cardsTweak = TWEAKS.find((tweak) => tweak.name === "integrated-tool-expansion");
 	if (cardsTweak) watchSetting(cardsTweak.setting, () => syncReadPreviewMapping());
 
@@ -2010,6 +2001,7 @@ export default function collapsed(pi: ExtensionAPI): void {
 		// Redraw now rather than on the settings watcher, which is a no-op when it was set up before settings loaded.
 		lastCtx = ctx;
 		toolRows.refresh();
+		syncReadPreviewMapping();
 		repaintToolCards(ctx);
 		if (ctx.hasUI) ctx.ui.notify(`Tool rows: ${TOOL_ROWS_MODES.map((mode) => (mode === next ? `[${mode}]` : mode)).join(" · ")}`, "info");
 	};
@@ -2021,9 +2013,8 @@ export default function collapsed(pi: ExtensionAPI): void {
 
 	/* ------------------------- TOON for the model ------------------------- */
 
-	// The model reads JSON tool results as TOON; the persisted result and every card keep the
-	// original JSON. Encoded per call id and re-used until the result text changes (pruning).
-	const toonByCallId = new Map<string, { source: string; toon: string | undefined }>();
+	// Cache per text block so interleaved images and tool output keep their original order.
+	const toonByCallId = new Map<string, { source: string; toolName: string; toon: string | undefined }>();
 	const TOON_CACHE_LIMIT = 2000;
 
 	pi.on("context", (event) => {
@@ -2031,18 +2022,23 @@ export default function collapsed(pi: ExtensionAPI): void {
 		let changed = false;
 		const messages = event.messages.map((message) => {
 			if (message.role !== "toolResult" || message.isError) return message;
-			const source = toolResultText(message.content);
-			if (source === undefined) return message;
-			let cached = toonByCallId.get(message.toolCallId);
-			if (!cached || cached.source !== source) {
-				if (toonByCallId.size >= TOON_CACHE_LIMIT) toonByCallId.clear();
-				cached = { source, toon: toonForModel(source) };
-				toonByCallId.set(message.toolCallId, cached);
-			}
-			if (cached.toon === undefined) return message;
+			let converted = false;
+			const content = message.content.map((block, index) => {
+				if (block.type !== "text") return block;
+				const key = `${message.toolCallId}:${index}`;
+				let cached = toonByCallId.get(key);
+				if (!cached || cached.source !== block.text || cached.toolName !== message.toolName) {
+					if (toonByCallId.size >= TOON_CACHE_LIMIT) toonByCallId.clear();
+					cached = { source: block.text, toolName: message.toolName, toon: toonForModel(block.text, message.toolName) };
+					toonByCallId.set(key, cached);
+				}
+				if (cached.toon === undefined) return block;
+				converted = true;
+				return { ...block, text: cached.toon };
+			});
+			if (!converted) return message;
 			changed = true;
-			const images = message.content.filter((block) => block.type !== "text");
-			return { ...message, content: [{ type: "text" as const, text: cached.toon }, ...images] };
+			return { ...message, content };
 		});
 		return changed ? { messages } : undefined;
 	});
@@ -2079,9 +2075,9 @@ export default function collapsed(pi: ExtensionAPI): void {
 		if (event.toolName !== "edit" || event.isError || !event.details || typeof event.details !== "object") return undefined;
 		// EditToolDetails is the host's type; this reads the subset it outlines from.
 		const details: EditOutlineDetails = event.details;
-		if (typeof details.newText === "string" || details.hydemodsOutline !== undefined) return undefined;
+		if (typeof details.newText === "string" || details.collapsedOutline !== undefined) return undefined;
 		const outline = editOutlineStructured({ content: event.content, details });
-		return outline ? { details: { ...event.details, hydemodsOutline: outline.text } } : undefined;
+		return outline ? { details: { ...event.details, collapsedOutline: outline.text } } : undefined;
 	});
 
 	// One handler per session event. Session switches start from nothing, so tool-row state resets.

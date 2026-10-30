@@ -5,7 +5,7 @@ import { parse as parseYaml } from "yaml";
 const MAX_NESTED_JSON_DEPTH = 4;
 const MAX_NESTED_JSON_STRING = 64 * 1024;
 
-/** Hydemods re-parses, colours and Markdown-renders a payload on every repaint; above this
+/** Collapsed re-parses, colours and Markdown-renders a payload on every repaint; above this
  * size the native card takes over, since it already has its own limits. */
 export const MAX_RENDER_BYTES = 256 * 1024;
 
@@ -22,7 +22,7 @@ export function sanitizeTerminalText(text: string): string {
 		.replace(/[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f]/g, "");
 }
 
-/** The payload hydemods may render, or undefined when it is past `MAX_RENDER_BYTES`. */
+/** The payload collapsed may render, or undefined when it is past `MAX_RENDER_BYTES`. */
 export function cappedRenderPayload<T>(value: T): T | undefined {
 	let bytes: number;
 	if (typeof value === "string") bytes = Buffer.byteLength(value, "utf8");

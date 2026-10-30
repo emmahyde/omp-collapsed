@@ -3,7 +3,7 @@ import { isSettingsInitialized, settings } from "@oh-my-pi/pi-coding-agent/confi
 
 export { settings };
 
-const PREFIX = "hydemods";
+const PREFIX = "collapsed";
 
 function settingId(name: string): string {
 	const camel = name.replace(/-([a-z0-9])/g, (_, ch: string) => ch.toUpperCase());
@@ -11,7 +11,7 @@ function settingId(name: string): string {
 }
 
 /**
- * Registers a persisted boolean under `hydemods.<camelName>` in OMP's settings store, or reuses the
+ * Registers a persisted boolean under `collapsed.<camelName>` in OMP's settings store, or reuses the
  * existing handle when the extension is loaded again in the same process. The value belongs to the
  * settings store, not to a session: every session in the process reads and writes the same toggle.
  */
@@ -22,7 +22,7 @@ export function booleanSetting(name: string, label: string, description: string,
 	return register({ id, type: "boolean", default: fallback, ui: { tab: "tools", label, description } });
 }
 
-/** Registers a persisted positive integer under `hydemods.<camelName>`. */
+/** Registers a persisted positive integer under `collapsed.<camelName>`. */
 export function integerSetting(name: string, label: string, description: string, fallback: number): Setting<number> {
 	const id = settingId(name);
 	const existing = lookup(id);
@@ -39,7 +39,7 @@ export function integerSetting(name: string, label: string, description: string,
 	});
 }
 
-/** Registers a persisted string under `hydemods.<camelName>`; `validate` throws to reject a value. */
+/** Registers a persisted string under `collapsed.<camelName>`; `validate` throws to reject a value. */
 export function stringSetting(name: string, label: string, description: string, fallback: string, validate?: (value: string) => void): Setting<string> {
 	const id = settingId(name);
 	const existing = lookup(id);
@@ -57,7 +57,7 @@ export function stringSetting(name: string, label: string, description: string, 
 	});
 }
 
-/** Registers a persisted choice among `values` under `hydemods.<camelName>`; the settings panel cycles it. */
+/** Registers a persisted choice among `values` under `collapsed.<camelName>`; the settings panel cycles it. */
 export function enumSetting<const T extends readonly [string, ...string[]]>(name: string, label: string, description: string, values: T, fallback: T[number]): Setting<T[number]> {
 	const id = settingId(name);
 	const existing = lookup(id);
@@ -70,7 +70,7 @@ export function readSetting<T>(setting: Setting<T>): T {
 	return isSettingsInitialized() ? setting.get(settings) : (setting.default as T);
 }
 
-/** Observes changes from any source (panel, command, or a hand edit of settings.yaml). */
+/** Observes changes from any source (panel, command, or a hand edit of config.yml). */
 export function watchSetting<T>(setting: Setting<T>, onChange: (value: T) => void): () => void {
 	if (!isSettingsInitialized()) return () => { };
 	return setting.listen(settings, value => onChange(value));

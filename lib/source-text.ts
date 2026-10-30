@@ -1,4 +1,4 @@
-// Display-only text clean-up for source code shown on hydemods cards: comments out, line-number
+// Display-only text clean-up for source code shown on collapsed cards: comments out, line-number
 // gutters off. The model never sees any of this; it only changes what the card draws.
 
 type CommentStyle = { line: string[]; block?: [string, string]; quotes: string; charLiterals?: boolean; needsSpaceBefore?: boolean };

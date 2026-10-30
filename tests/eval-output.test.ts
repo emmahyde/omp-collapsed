@@ -113,7 +113,7 @@ test("unsupported and truncated inspect output stays raw, with no nested salvage
 });
 
 test("rejects executable syntax and template interpolation without side effects", () => {
-	const sentinel = "__hydemodsEvalOutputExecuted";
+	const sentinel = "__collapsedEvalOutputExecuted";
 	const globals = globalThis as unknown as Record<string, unknown>;
 	delete globals[sentinel];
 	const malicious = [

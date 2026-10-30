@@ -94,7 +94,7 @@ describe("card verify harness for TOON output", async () => {
 			expect(str).toContain("alpha");
 		}
 	});
-	test("grep toolRenderer enriches matches with AST declaration outline in hydemods cards", () => {
+	test("grep toolRenderer enriches matches with AST declaration outline in collapsed cards", () => {
 		const grepRenderer = toolRenderers.grep;
 		expect(grepRenderer).toBeDefined();
 
@@ -219,6 +219,23 @@ describe("card verify harness for TOON output", async () => {
 		expect(plain).toContain("# Main Doc  :1");
 		expect(plain).toContain("## Setup  :3");
 		expect(plain).toContain("### Advanced  :5");
+	});
+
+	test("edit cards replay the standalone captured outline without reading the changed file", () => {
+		const captured = "missing.ts · typescript · 3 lines · 1 decl\n + export class Captured  :1";
+		const result = {
+			content: [{ type: "text" as const, text: "Updated missing.ts" }],
+			details: {
+				path: "/missing/standalone-captured-outline.ts",
+				diff: "@@ -1 +1 @@\n-export class Before {}\n+export class Captured {}",
+				snapshotsPruned: true,
+				collapsedOutline: captured,
+			},
+			isError: false,
+		};
+		const rendered = toolRenderers.edit.renderResult(result, { expanded: true, isPartial: false }, themeModule.theme, { path: result.details.path });
+		expect(rendered).toBeDefined();
+		expect(plain(rendered!.render(120).join("\n"))).toContain("export class Captured");
 	});
 
 	function plain(value: string): string { return value.replace(/\u001b\[[0-9;]*m/g, ""); }
@@ -408,7 +425,7 @@ describe("card verify harness for TOON output", async () => {
 			expect(text).toContain("entries[2]");
 		}
 		expect(JSON.stringify(result)).toBe(snapshot);
-		// Real card takeover: no native Eval box, no ANSI box border; a hydemods card with a foot instead.
+		// Real card takeover: no native Eval box, no ANSI box border; a collapsed card with a foot instead.
 		const nativeCard = JSON.stringify(view(result));
 		expect(nativeCard).not.toContain("omp.tool.eval.input");
 		expect(nativeCard).not.toContain("omp.run.foot");
