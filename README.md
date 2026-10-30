@@ -1,5 +1,7 @@
 # omp-collapsed
 
+<img width="1000" alt="Screenshot 2026-10-30 at 12 39 55" src="https://github.com/user-attachments/assets/4d0cfdfd-d7d0-41b6-88bf-e3fdf90127f1" />
+
 Compacted tool-result views for [Oh My Pi (OMP)](https://github.com/can1357/oh-my-pi). It redraws tool calls and their results as short cards, one-line rows, or per-burst summaries, and shows source code as declaration outlines. The model sees the same results as TOON, a compact table form.
 
 It is the card and row part of [hydemods](https://github.com/emmahyde/hydemods), split into its own extension.
