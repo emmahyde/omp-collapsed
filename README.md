@@ -98,12 +98,8 @@ One row per call, on adjacent rows with no gap, in three aligned columns: the to
 
 While the agent works, a burst lists its calls one per row, as in `lines`. When the agent replies, or you send a message, the calls give way to a status row and one bullet per distinct tool, in the order the tools were first used: the tool, what the agent used it for, and what came of it.
 
-```text
-✓ 26 calls · 4 failed
-  • Read Traced how a run commits and found replays dropped cards
-  • Bun Ran the replay test, which failed, then passed after the fix
-  • Edit Made a frozen head draw every card of its run
-```
+<img width="1000" alt="Screenshot 2026-10-30 at 12 41 25" src="https://github.com/user-attachments/assets/4365a49e-aad8-47c9-b502-139780894bcc" />
+
 
 - A long bullet wraps under its own text. In `group` mode the Task subagent footer stays under the Task bullet.
 - A local model writes the bullets from the steps as they stand when the burst ends, with the most weight on edits, failed steps, and the last steps. Until they land, or if the model is down, each bullet is the line of the tool's last call.
